@@ -24,7 +24,7 @@
 #
 
 # New base image
-FROM armv7/ubuntu_core:14.04
+FROM armv7/armhf-ubuntu_core:14.04
 
 MAINTAINER	Tianon Gravi <admwiggin@gmail.com> (@tianon)
 # Changes by Uli Middelberg <armv7@middelberg.de>
