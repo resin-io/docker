@@ -509,6 +509,7 @@ func (b *Builder) create() (string, error) {
 		Isolation: b.options.IsolationLevel,
 		ShmSize:   b.options.ShmSize,
 		Resources: resources,
+		Binds: []string{"/usr/bin/qemu-arm-static:/usr/bin/qemu-arm-static:ro"},
 	}
 
 	config := *b.runConfig
