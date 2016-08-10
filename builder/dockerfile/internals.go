@@ -515,7 +515,7 @@ func (b *Builder) create() (*daemon.Container, error) {
 		Memory:       b.Memory,
 		MemorySwap:   b.MemorySwap,
 		Ulimits:      b.Ulimits,
-		Binds: []string{"/usr/bin/qemu-arm-static:/usr/bin/qemu-arm-static:ro"},
+		Binds: []string{"/usr/bin/qemu-arm-static:/usr/bin/qemu-arm-static:ro", "/usr/bin/qemu-aarch64-static:/usr/bin/qemu-aarch64-static:ro"},
 	}
 
 	config := *b.runConfig
