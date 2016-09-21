@@ -504,6 +504,23 @@ func (b *Builder) create() (*daemon.Container, error) {
 	}
 	b.runConfig.Image = b.image
 
+	var mounts []string
+	potentialMounts := []string{
+		"/usr/bin/qemu-arm-static",
+		"/usr/bin/qemu-aarch64-static",
+	}
+
+	for _, mount := range potentialMounts {
+		if _, err := os.Stat(mount); err == nil {
+			toAdd := fmt.Sprintf("%s:%s:ro", mount, mount)
+			mounts = append(mounts, toAdd)
+			fmt.Fprintf(b.Stdout, " ---> Adding bind mount during build: %s\n", toAdd)
+		} else {
+			fmt.Fprintf(b.Stdout, " ---> Not adding bind mount during build (binary does not exist on host): %s\n", mount)
+		}
+	}
+
+
 	// TODO: why not embed a hostconfig in builder?
 	hostConfig := &runconfig.HostConfig{
 		CPUShares:    b.CPUShares,
@@ -515,7 +532,7 @@ func (b *Builder) create() (*daemon.Container, error) {
 		Memory:       b.Memory,
 		MemorySwap:   b.MemorySwap,
 		Ulimits:      b.Ulimits,
-		Binds: []string{"/usr/bin/qemu-arm-static:/usr/bin/qemu-arm-static:ro", "/usr/bin/qemu-aarch64-static:/usr/bin/qemu-aarch64-static:ro"},
+		Binds:        mounts,
 	}
 
 	config := *b.runConfig
