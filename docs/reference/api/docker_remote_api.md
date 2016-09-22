@@ -111,6 +111,12 @@ Running `docker rmi` emits an **untag** event when removing an image name.  The 
 
 This section lists each version from latest to oldest.  Each listing includes a link to the full documentation set and the changes relevant in that release.
 
+### v1.25 API changes
+
+[Docker Remote API v1.25](docker_remote_api_v1.25.md) documentation
+
+* `POST /build` accepts `cachefrom` parameter to specify images used for build cache.
+
 ### v1.24 API changes
 
 [Docker Remote API v1.24](docker_remote_api_v1.24.md) documentation
