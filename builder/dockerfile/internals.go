@@ -500,12 +500,16 @@ func (b *Builder) create() (string, error) {
 	}
 
 	for _, mount := range potentialMounts {
-		if _, err := os.Stat(mount); err == nil {
-			toAdd := fmt.Sprintf("%s:%s:ro", mount, mount)
-			mounts = append(mounts, toAdd)
-			fmt.Fprintf(b.Stdout, " ---> Adding bind mount during build: %s\n", toAdd)
+		if stat, err := os.Stat(mount); err == nil {
+			if stat.Mode().IsRegular() {
+				toAdd := fmt.Sprintf("%s:%s:ro", mount, mount)
+				mounts = append(mounts, toAdd)
+				logrus.Debugf("[BUILDER] Adding bind mount during build: %s\n", toAdd)
+			} else {
+				logrus.Debugf("[BUILDER] Not adding bind mount during build (path is not a regular file): %s\n", mount)
+			}
 		} else {
-			fmt.Fprintf(b.Stdout, " ---> Not adding bind mount during build (binary does not exist on host): %s\n", mount)
+			logrus.Debugf("[BUILDER] Not adding bind mount during build (binary does not exist on host): %s\n", mount)
 		}
 	}
 
