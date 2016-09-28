@@ -504,12 +504,12 @@ func (b *Builder) create() (string, error) {
 			if stat.Mode().IsRegular() {
 				toAdd := fmt.Sprintf("%s:%s:ro", mount, mount)
 				mounts = append(mounts, toAdd)
-				logrus.Debugf("[BUILDER] Adding bind mount during build: %s\n", toAdd)
+				logrus.Debugf("[BUILDER] Adding bind mount during build: %s", toAdd)
 			} else {
-				logrus.Debugf("[BUILDER] Not adding bind mount during build (path is not a regular file): %s\n", mount)
+				logrus.Debugf("[BUILDER] Not adding bind mount during build (path is not a regular file): %s", mount)
 			}
 		} else {
-			logrus.Debugf("[BUILDER] Not adding bind mount during build (binary does not exist on host): %s\n", mount)
+			logrus.Debugf("[BUILDER] Not adding bind mount during build (binary does not exist on host): %s", mount)
 		}
 	}
 
@@ -518,7 +518,7 @@ func (b *Builder) create() (string, error) {
 		Isolation: b.options.Isolation,
 		ShmSize:   b.options.ShmSize,
 		Resources: resources,
-		Binds:        mounts,
+		Binds:     mounts,
 	}
 
 	config := *b.runConfig
