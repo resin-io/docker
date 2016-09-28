@@ -113,6 +113,12 @@ func imageBuildOptionsToQuery(options types.ImageBuildOptions) (url.Values, erro
 	}
 	query.Set("cachefrom", string(cacheFromJSON))
 
+	volumesJSON, err := json.Marshal(options.Volumes)
+	if err != nil {
+		return query, err
+	}
+	query.Set("volumes", string(volumesJSON))
+
 	return query, nil
 }
 

@@ -498,6 +498,7 @@ func (b *Builder) create() (string, error) {
 		Isolation: b.options.Isolation,
 		ShmSize:   b.options.ShmSize,
 		Resources: resources,
+		Binds:     b.options.Volumes,
 	}
 
 	config := *b.runConfig
