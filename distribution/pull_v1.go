@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/image/v1"
 	"github.com/docker/docker/layer"
+	"github.com/docker/docker/pkg/fadvise"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/progress"
 	"github.com/docker/docker/pkg/stringid"
@@ -326,6 +327,11 @@ func (ld *v1LayerDescriptor) Download(ctx context.Context, progressOutput progre
 	logrus.Debugf("Downloaded %s to tempfile %s", ld.ID(), tmpFile.Name())
 
 	tmpFile.Seek(0, 0)
+
+	tmpFile.Sync()
+	if err := fadvise.PosixFadvise(tmpFile, 0, 0, fadvise.POSIX_FADV_DONTNEED); err != nil {
+		return nil, 0, err
+	}
 	return ioutils.NewReadCloserWrapper(tmpFile, tmpFileCloser(tmpFile)), ld.layerSize, nil
 }
 

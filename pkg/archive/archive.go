@@ -18,6 +18,7 @@ import (
 	"syscall"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/docker/pkg/fadvise"
 	"github.com/docker/docker/pkg/fileutils"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/ioutils"
@@ -468,6 +469,10 @@ func createTarFile(path, extractDir string, hdr *tar.Header, reader io.Reader, L
 			return err
 		}
 		if err := file.Sync(); err != nil {
+			file.Close()
+			return err
+		}
+		if err := fadvise.PosixFadvise(file, 0, 0, fadvise.POSIX_FADV_DONTNEED); err != nil {
 			file.Close()
 			return err
 		}
