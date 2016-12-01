@@ -460,6 +460,20 @@ func createTarFile(path, extractDir string, hdr *tar.Header, reader io.Reader, L
 			return err
 		}
 	}
+
+	if hdr.Typeflag == tar.TypeReg || hdr.Typeflag == tar.TypeRegA {
+		file, err := os.Open(path)
+		if err != nil {
+			file.Close()
+			return err
+		}
+		if err := file.Sync(); err != nil {
+			file.Close()
+			return err
+		}
+		file.Close()
+	}
+
 	return nil
 }
 
@@ -624,6 +638,7 @@ func Unpack(decompressedArchive io.Reader, dest string, options *TarOptions) err
 	defer pools.BufioReader32KPool.Put(trBuf)
 
 	var dirs []*tar.Header
+	dirtyDirs := make(map[string]bool)
 	remappedRootUID, remappedRootGID, err := idtools.GetRootUIDGID(options.UIDMaps, options.GIDMaps)
 	if err != nil {
 		return err
@@ -663,6 +678,10 @@ loop:
 				err = system.MkdirAll(parentPath, 0777)
 				if err != nil {
 					return err
+				}
+				// Mark all directories as dirty
+				for ; parent != "/"; parent = filepath.Dir(parent) {
+					dirtyDirs[parent] = true
 				}
 			}
 		}
@@ -735,6 +754,7 @@ loop:
 		// file creation in them to modify the directory mtime
 		if hdr.Typeflag == tar.TypeDir {
 			dirs = append(dirs, hdr)
+			dirtyDirs[hdr.Name] = true
 		}
 	}
 
@@ -744,6 +764,21 @@ loop:
 		if err := system.Chtimes(path, hdr.AccessTime, hdr.ModTime); err != nil {
 			return err
 		}
+	}
+
+	for relPath, _ := range dirtyDirs {
+		path := filepath.Join(dest, relPath)
+
+		dir, err := os.OpenFile(path, syscall.O_DIRECTORY, 0)
+		if err != nil {
+			dir.Close()
+			return err
+		}
+		if err := dir.Sync(); err != nil {
+			dir.Close()
+			return err
+		}
+		dir.Close()
 	}
 	return nil
 }
