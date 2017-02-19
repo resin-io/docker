@@ -1,3 +1,5 @@
+// +build !solaris
+
 package registry
 
 import (
@@ -15,9 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/docker/opts"
-	"github.com/docker/docker/reference"
-	registrytypes "github.com/docker/engine-api/types/registry"
+	"github.com/docker/distribution/reference"
+	registrytypes "github.com/docker/docker/api/types/registry"
 	"github.com/gorilla/mux"
 
 	"github.com/Sirupsen/logrus"
@@ -174,23 +175,13 @@ func makePublicIndex() *registrytypes.IndexInfo {
 	return index
 }
 
-func makeServiceConfig(mirrors []string, insecureRegistries []string) *registrytypes.ServiceConfig {
-	options := &Options{
-		Mirrors:            opts.NewListOpts(nil),
-		InsecureRegistries: opts.NewListOpts(nil),
-	}
-	if mirrors != nil {
-		for _, mirror := range mirrors {
-			options.Mirrors.Set(mirror)
-		}
-	}
-	if insecureRegistries != nil {
-		for _, insecureRegistries := range insecureRegistries {
-			options.InsecureRegistries.Set(insecureRegistries)
-		}
+func makeServiceConfig(mirrors []string, insecureRegistries []string) *serviceConfig {
+	options := ServiceOptions{
+		Mirrors:            mirrors,
+		InsecureRegistries: insecureRegistries,
 	}
 
-	return NewServiceConfig(options)
+	return newServiceConfig(options)
 }
 
 func writeHeaders(w http.ResponseWriter) {

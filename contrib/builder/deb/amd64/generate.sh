@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # usage: ./generate.sh [versions]
@@ -41,7 +41,24 @@ for version in "${versions[@]}"; do
 
 	echo >> "$version/Dockerfile"
 
-	extraBuildTags=
+	if [ "$distro" = "debian" ]; then
+		cat >> "$version/Dockerfile" <<-'EOF'
+			# allow replacing httpredir or deb mirror
+			ARG APT_MIRROR=deb.debian.org
+			RUN sed -ri "s/(httpredir|deb).debian.org/$APT_MIRROR/g" /etc/apt/sources.list
+		EOF
+
+		if [ "$suite" = "wheezy" ]; then
+			cat >> "$version/Dockerfile" <<-'EOF'
+				RUN sed -ri "s/(httpredir|deb).debian.org/$APT_MIRROR/g" /etc/apt/sources.list.d/backports.list
+			EOF
+		fi
+
+		echo "" >> "$version/Dockerfile"
+	fi
+
+	extraBuildTags='pkcs11'
+	runcBuildTags=
 
 	# this list is sorted alphabetically; please keep it that way
 	packages=(
@@ -49,6 +66,7 @@ for version in "${versions[@]}"; do
 		bash-completion # for bash-completion debhelper integration
 		btrfs-tools # for "btrfs/ioctl.h" (and "version.h" if possible)
 		build-essential # "essential for building Debian packages"
+		cmake # tini dep
 		curl ca-certificates # for downloading Go
 		debhelper # for easy ".deb" building
 		dh-apparmor # for apparmor debhelper
@@ -58,14 +76,14 @@ for version in "${versions[@]}"; do
 		libdevmapper-dev # for "libdevmapper.h"
 		libltdl-dev # for pkcs11 "ltdl.h"
 		libseccomp-dev  # for "seccomp.h" & "libseccomp.so"
-		libsqlite3-dev # for "sqlite3.h"
 		pkg-config # for detecting things like libsystemd-journal dynamically
+		vim-common # tini dep
 	)
 	# packaging for "sd-journal.h" and libraries varies
 	case "$suite" in
 		precise|wheezy) ;;
-		sid|stretch|wily) packages+=( libsystemd-dev );;
-		*) packages+=( libsystemd-journal-dev );;
+		jessie|trusty) packages+=( libsystemd-journal-dev );;
+		*) packages+=( libsystemd-dev );;
 	esac
 
 	# debian wheezy & ubuntu precise do not have the right libseccomp libs
@@ -73,9 +91,11 @@ for version in "${versions[@]}"; do
 	case "$suite" in
 		precise|wheezy|jessie|trusty)
 			packages=( "${packages[@]/libseccomp-dev}" )
+			runcBuildTags="apparmor selinux"
 			;;
 		*)
 			extraBuildTags+=' seccomp'
+			runcBuildTags="apparmor seccomp selinux"
 			;;
 	esac
 
@@ -111,7 +131,7 @@ for version in "${versions[@]}"; do
 	echo >> "$version/Dockerfile"
 
 	awk '$1 == "ENV" && $2 == "GO_VERSION" { print; exit }' ../../../../Dockerfile >> "$version/Dockerfile"
-	echo 'RUN curl -fSL "https://storage.googleapis.com/golang/go${GO_VERSION}.linux-amd64.tar.gz" | tar xzC /usr/local' >> "$version/Dockerfile"
+	echo 'RUN curl -fSL "https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz" | tar xzC /usr/local' >> "$version/Dockerfile"
 	echo 'ENV PATH $PATH:/usr/local/go/bin' >> "$version/Dockerfile"
 
 	echo >> "$version/Dockerfile"
@@ -124,4 +144,5 @@ for version in "${versions[@]}"; do
 	buildTags=$( echo "apparmor selinux $extraBuildTags" | xargs -n1 | sort -n | tr '\n' ' ' | sed -e 's/[[:space:]]*$//' )
 
 	echo "ENV DOCKER_BUILDTAGS $buildTags" >> "$version/Dockerfile"
+	echo "ENV RUNC_BUILDTAGS $runcBuildTags" >> "$version/Dockerfile"
 done

@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/docker/distribution/digest"
+	"github.com/opencontainers/go-digest"
 )
 
 func randomLayerID(seed int64) ChainID {
@@ -44,17 +44,6 @@ func assertNotDirectoryError(t *testing.T, err error) {
 
 	if perr.Err != syscall.ENOTDIR {
 		t.Fatalf("Unexpected error %s, expected %s", perr.Err, syscall.ENOTDIR)
-	}
-}
-
-func assertPermissionError(t *testing.T, err error) {
-	perr, ok := err.(*os.PathError)
-	if !ok {
-		t.Fatalf("Unexpected error %#v, expected path error", err)
-	}
-
-	if perr.Err != syscall.EACCES {
-		t.Fatalf("Unexpected error %s, expected %s", perr.Err, syscall.EACCES)
 	}
 }
 

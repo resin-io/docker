@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/docker/distribution/digest"
+	"github.com/docker/distribution"
+	"github.com/opencontainers/go-digest"
 )
 
 type roLayer struct {
@@ -14,11 +15,14 @@ type roLayer struct {
 	cacheID    string
 	size       int64
 	layerStore *layerStore
+	descriptor distribution.Descriptor
 
 	referenceCount int
 	references     map[Layer]struct{}
 }
 
+// TarStream for roLayer guarantees that the data that is produced is the exact
+// data that the layer was registered with.
 func (rl *roLayer) TarStream() (io.ReadCloser, error) {
 	r, err := rl.layerStore.store.TarSplitReader(rl.chainID)
 	if err != nil {
@@ -39,6 +43,24 @@ func (rl *roLayer) TarStream() (io.ReadCloser, error) {
 		return nil, err
 	}
 	return rc, nil
+}
+
+// TarStreamFrom does not make any guarantees to the correctness of the produced
+// data. As such it should not be used when the layer content must be verified
+// to be an exact match to the registered layer.
+func (rl *roLayer) TarStreamFrom(parent ChainID) (io.ReadCloser, error) {
+	var parentCacheID string
+	for pl := rl.parent; pl != nil; pl = pl.parent {
+		if pl.chainID == parent {
+			parentCacheID = pl.cacheID
+			break
+		}
+	}
+
+	if parent != ChainID("") && parentCacheID == "" {
+		return nil, fmt.Errorf("layer ID '%s' is not a parent of the specified layer: cannot provide diff to non-parent", parent)
+	}
+	return rl.layerStore.driver.Diff(rl.cacheID, parentCacheID)
 }
 
 func (rl *roLayer) ChainID() ChainID {
@@ -118,6 +140,12 @@ func storeLayer(tx MetadataTransaction, layer *roLayer) error {
 	if err := tx.SetCacheID(layer.cacheID); err != nil {
 		return err
 	}
+	// Do not store empty descriptors
+	if layer.descriptor.Digest != "" {
+		if err := tx.SetDescriptor(layer.descriptor); err != nil {
+			return err
+		}
+	}
 	if layer.parent != nil {
 		if err := tx.SetParent(layer.parent.chainID); err != nil {
 			return err
@@ -128,14 +156,10 @@ func storeLayer(tx MetadataTransaction, layer *roLayer) error {
 }
 
 func newVerifiedReadCloser(rc io.ReadCloser, dgst digest.Digest) (io.ReadCloser, error) {
-	verifier, err := digest.NewDigestVerifier(dgst)
-	if err != nil {
-		return nil, err
-	}
 	return &verifiedReadCloser{
 		rc:       rc,
 		dgst:     dgst,
-		verifier: verifier,
+		verifier: dgst.Verifier(),
 	}, nil
 }
 

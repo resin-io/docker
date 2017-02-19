@@ -22,7 +22,7 @@ func TestJSONFileLogger(t *testing.T) {
 	}
 	defer os.RemoveAll(tmp)
 	filename := filepath.Join(tmp, "container.log")
-	l, err := New(logger.Context{
+	l, err := New(logger.Info{
 		ContainerID: cid,
 		LogPath:     filename,
 	})
@@ -31,13 +31,13 @@ func TestJSONFileLogger(t *testing.T) {
 	}
 	defer l.Close()
 
-	if err := l.Log(&logger.Message{ContainerID: cid, Line: []byte("line1"), Source: "src1"}); err != nil {
+	if err := l.Log(&logger.Message{Line: []byte("line1"), Source: "src1"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := l.Log(&logger.Message{ContainerID: cid, Line: []byte("line2"), Source: "src2"}); err != nil {
+	if err := l.Log(&logger.Message{Line: []byte("line2"), Source: "src2"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := l.Log(&logger.Message{ContainerID: cid, Line: []byte("line3"), Source: "src3"}); err != nil {
+	if err := l.Log(&logger.Message{Line: []byte("line3"), Source: "src3"}); err != nil {
 		t.Fatal(err)
 	}
 	res, err := ioutil.ReadFile(filename)
@@ -62,7 +62,7 @@ func BenchmarkJSONFileLogger(b *testing.B) {
 	}
 	defer os.RemoveAll(tmp)
 	filename := filepath.Join(tmp, "container.log")
-	l, err := New(logger.Context{
+	l, err := New(logger.Info{
 		ContainerID: cid,
 		LogPath:     filename,
 	})
@@ -72,7 +72,7 @@ func BenchmarkJSONFileLogger(b *testing.B) {
 	defer l.Close()
 
 	testLine := "Line that thinks that it is log line from docker\n"
-	msg := &logger.Message{ContainerID: cid, Line: []byte(testLine), Source: "stderr", Timestamp: time.Now().UTC()}
+	msg := &logger.Message{Line: []byte(testLine), Source: "stderr", Timestamp: time.Now().UTC()}
 	jsonlog, err := (&jsonlog.JSONLog{Log: string(msg.Line) + "\n", Stream: msg.Source, Created: msg.Timestamp}).MarshalJSON()
 	if err != nil {
 		b.Fatal(err)
@@ -97,7 +97,7 @@ func TestJSONFileLoggerWithOpts(t *testing.T) {
 	defer os.RemoveAll(tmp)
 	filename := filepath.Join(tmp, "container.log")
 	config := map[string]string{"max-file": "2", "max-size": "1k"}
-	l, err := New(logger.Context{
+	l, err := New(logger.Info{
 		ContainerID: cid,
 		LogPath:     filename,
 		Config:      config,
@@ -107,7 +107,7 @@ func TestJSONFileLoggerWithOpts(t *testing.T) {
 	}
 	defer l.Close()
 	for i := 0; i < 20; i++ {
-		if err := l.Log(&logger.Message{ContainerID: cid, Line: []byte("line" + strconv.Itoa(i)), Source: "src1"}); err != nil {
+		if err := l.Log(&logger.Message{Line: []byte("line" + strconv.Itoa(i)), Source: "src1"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -161,7 +161,7 @@ func TestJSONFileLoggerWithLabelsEnv(t *testing.T) {
 	defer os.RemoveAll(tmp)
 	filename := filepath.Join(tmp, "container.log")
 	config := map[string]string{"labels": "rack,dc", "env": "environ,debug,ssl"}
-	l, err := New(logger.Context{
+	l, err := New(logger.Info{
 		ContainerID:     cid,
 		LogPath:         filename,
 		Config:          config,
@@ -172,7 +172,7 @@ func TestJSONFileLoggerWithLabelsEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer l.Close()
-	if err := l.Log(&logger.Message{ContainerID: cid, Line: []byte("line"), Source: "src1"}); err != nil {
+	if err := l.Log(&logger.Message{Line: []byte("line"), Source: "src1"}); err != nil {
 		t.Fatal(err)
 	}
 	res, err := ioutil.ReadFile(filename)
@@ -210,7 +210,7 @@ func BenchmarkJSONFileLoggerWithReader(b *testing.B) {
 	}
 	defer os.RemoveAll(dir)
 
-	l, err := New(logger.Context{
+	l, err := New(logger.Info{
 		ContainerID: cid,
 		LogPath:     filepath.Join(dir, "container.log"),
 	})
@@ -218,7 +218,7 @@ func BenchmarkJSONFileLoggerWithReader(b *testing.B) {
 		b.Fatal(err)
 	}
 	defer l.Close()
-	msg := &logger.Message{ContainerID: cid, Line: []byte("line"), Source: "src1"}
+	msg := &logger.Message{Line: []byte("line"), Source: "src1"}
 	jsonlog, err := (&jsonlog.JSONLog{Log: string(msg.Line) + "\n", Stream: msg.Source, Created: msg.Timestamp}).MarshalJSON()
 	if err != nil {
 		b.Fatal(err)

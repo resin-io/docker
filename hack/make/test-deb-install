@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # This script is used for testing install.sh and that it works for
 # each of component of our apt and yum repos
 set -e
@@ -16,7 +16,10 @@ test_deb_install(){
 	builderDir="contrib/builder/deb/${PACKAGE_ARCH}"
 	pkgs=( $(find "${builderDir}/"*/ -type d) )
 	if [ ! -z "$DOCKER_BUILD_PKGS" ]; then
-		pkgs=( $(echo ${DOCKER_BUILD_PKGS[@]/#/$builderDir\/}) )
+		pkgs=()
+		for p in $DOCKER_BUILD_PKGS; do
+			pkgs+=( "$builderDir/$p" )
+		done
 	fi
 	for dir in "${pkgs[@]}"; do
 		[ -d "$dir" ] || { echo >&2 "skipping nonexistent $dir"; continue; }

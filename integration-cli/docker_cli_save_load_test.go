@@ -13,9 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/distribution/digest"
-	"github.com/docker/docker/pkg/integration/checker"
+	"github.com/docker/docker/integration-cli/checker"
+	"github.com/docker/docker/pkg/testutil"
+	icmd "github.com/docker/docker/pkg/testutil/cmd"
 	"github.com/go-check/check"
+	"github.com/opencontainers/go-digest"
 )
 
 // save a repo using gz compression and try to load it using stdout
@@ -29,17 +31,19 @@ func (s *DockerSuite) TestSaveXzAndLoadRepoStdout(c *check.C) {
 
 	dockerCmd(c, "inspect", repoName)
 
-	repoTarball, _, err := runCommandPipelineWithOutput(
+	repoTarball, _, err := testutil.RunCommandPipelineWithOutput(
 		exec.Command(dockerBinary, "save", repoName),
 		exec.Command("xz", "-c"),
 		exec.Command("gzip", "-c"))
 	c.Assert(err, checker.IsNil, check.Commentf("failed to save repo: %v %v", out, err))
 	deleteImages(repoName)
 
-	loadCmd := exec.Command(dockerBinary, "load")
-	loadCmd.Stdin = strings.NewReader(repoTarball)
-	out, _, err = runCommandWithOutput(loadCmd)
-	c.Assert(err, checker.NotNil, check.Commentf("expected error, but succeeded with no error and output: %v", out))
+	icmd.RunCmd(icmd.Cmd{
+		Command: []string{dockerBinary, "load"},
+		Stdin:   strings.NewReader(repoTarball),
+	}).Assert(c, icmd.Expected{
+		ExitCode: 1,
+	})
 
 	after, _, err := dockerCmdWithError("inspect", repoName)
 	c.Assert(err, checker.NotNil, check.Commentf("the repo should not exist: %v", after))
@@ -56,7 +60,7 @@ func (s *DockerSuite) TestSaveXzGzAndLoadRepoStdout(c *check.C) {
 
 	dockerCmd(c, "inspect", repoName)
 
-	out, _, err := runCommandPipelineWithOutput(
+	out, _, err := testutil.RunCommandPipelineWithOutput(
 		exec.Command(dockerBinary, "save", repoName),
 		exec.Command("xz", "-c"),
 		exec.Command("gzip", "-c"))
@@ -64,10 +68,12 @@ func (s *DockerSuite) TestSaveXzGzAndLoadRepoStdout(c *check.C) {
 
 	deleteImages(repoName)
 
-	loadCmd := exec.Command(dockerBinary, "load")
-	loadCmd.Stdin = strings.NewReader(out)
-	out, _, err = runCommandWithOutput(loadCmd)
-	c.Assert(err, checker.NotNil, check.Commentf("expected error, but succeeded with no error and output: %v", out))
+	icmd.RunCmd(icmd.Cmd{
+		Command: []string{dockerBinary, "load"},
+		Stdin:   strings.NewReader(out),
+	}).Assert(c, icmd.Expected{
+		ExitCode: 1,
+	})
 
 	after, _, err := dockerCmdWithError("inspect", repoName)
 	c.Assert(err, checker.NotNil, check.Commentf("the repo should not exist: %v", after))
@@ -81,7 +87,7 @@ func (s *DockerSuite) TestSaveSingleTag(c *check.C) {
 	out, _ := dockerCmd(c, "images", "-q", "--no-trunc", repoName)
 	cleanedImageID := strings.TrimSpace(out)
 
-	out, _, err := runCommandPipelineWithOutput(
+	out, _, err := testutil.RunCommandPipelineWithOutput(
 		exec.Command(dockerBinary, "save", fmt.Sprintf("%v:latest", repoName)),
 		exec.Command("tar", "t"),
 		exec.Command("grep", "-E", fmt.Sprintf("(^repositories$|%v)", cleanedImageID)))
@@ -100,7 +106,7 @@ func (s *DockerSuite) TestSaveCheckTimes(c *check.C) {
 	c.Assert(err, checker.IsNil, check.Commentf("failed to marshal from %q: err %v", repoName, err))
 	c.Assert(len(data), checker.Not(checker.Equals), 0, check.Commentf("failed to marshal the data from %q", repoName))
 	tarTvTimeFormat := "2006-01-02 15:04"
-	out, _, err = runCommandPipelineWithOutput(
+	out, _, err = testutil.RunCommandPipelineWithOutput(
 		exec.Command(dockerBinary, "save", repoName),
 		exec.Command("tar", "tv"),
 		exec.Command("grep", "-E", fmt.Sprintf("%s %s", data[0].Created.Format(tarTvTimeFormat), digest.Digest(data[0].ID).Hex())))
@@ -158,13 +164,23 @@ func (s *DockerSuite) TestSaveAndLoadRepoFlags(c *check.C) {
 
 	before, _ := dockerCmd(c, "inspect", repoName)
 
-	out, _, err := runCommandPipelineWithOutput(
+	out, _, err := testutil.RunCommandPipelineWithOutput(
 		exec.Command(dockerBinary, "save", repoName),
 		exec.Command(dockerBinary, "load"))
 	c.Assert(err, checker.IsNil, check.Commentf("failed to save and load repo: %s, %v", out, err))
 
 	after, _ := dockerCmd(c, "inspect", repoName)
 	c.Assert(before, checker.Equals, after, check.Commentf("inspect is not the same after a save / load"))
+}
+
+func (s *DockerSuite) TestSaveWithNoExistImage(c *check.C) {
+	testRequires(c, DaemonIsLinux)
+
+	imgName := "foobar-non-existing-image"
+
+	out, _, err := dockerCmdWithError("save", "-o", "test-img.tar", imgName)
+	c.Assert(err, checker.NotNil, check.Commentf("save image should fail for non-existing image"))
+	c.Assert(out, checker.Contains, fmt.Sprintf("No such image: %s", imgName))
 }
 
 func (s *DockerSuite) TestSaveMultipleNames(c *check.C) {
@@ -177,7 +193,7 @@ func (s *DockerSuite) TestSaveMultipleNames(c *check.C) {
 	// Make two images
 	dockerCmd(c, "tag", "emptyfs:latest", fmt.Sprintf("%v-two:latest", repoName))
 
-	out, _, err := runCommandPipelineWithOutput(
+	out, _, err := testutil.RunCommandPipelineWithOutput(
 		exec.Command(dockerBinary, "save", fmt.Sprintf("%v-one", repoName), fmt.Sprintf("%v-two:latest", repoName)),
 		exec.Command("tar", "xO", "repositories"),
 		exec.Command("grep", "-q", "-E", "(-one|-two)"),
@@ -209,7 +225,7 @@ func (s *DockerSuite) TestSaveRepoWithMultipleImages(c *check.C) {
 	deleteImages(repoName)
 
 	// create the archive
-	out, _, err := runCommandPipelineWithOutput(
+	out, _, err := testutil.RunCommandPipelineWithOutput(
 		exec.Command(dockerBinary, "save", repoName, "busybox:latest"),
 		exec.Command("tar", "t"))
 	c.Assert(err, checker.IsNil, check.Commentf("failed to save multiple images: %s, %v", out, err))
@@ -249,14 +265,11 @@ func (s *DockerSuite) TestSaveDirectoryPermissions(c *check.C) {
 	os.Mkdir(extractionDirectory, 0777)
 
 	defer os.RemoveAll(tmpDir)
-	_, err = buildImage(name,
-		`FROM busybox
+	buildImageSuccessfully(c, name, withDockerfile(`FROM busybox
 	RUN adduser -D user && mkdir -p /opt/a/b && chown -R user:user /opt/a
-	RUN touch /opt/a/b/c && chown user:user /opt/a/b/c`,
-		true)
-	c.Assert(err, checker.IsNil, check.Commentf("%v", err))
+	RUN touch /opt/a/b/c && chown user:user /opt/a/b/c`))
 
-	out, _, err := runCommandPipelineWithOutput(
+	out, _, err := testutil.RunCommandPipelineWithOutput(
 		exec.Command(dockerBinary, "save", name),
 		exec.Command("tar", "-xf", "-", "-C", extractionDirectory),
 	)
@@ -273,8 +286,9 @@ func (s *DockerSuite) TestSaveDirectoryPermissions(c *check.C) {
 
 			f, err := os.Open(layerPath)
 			c.Assert(err, checker.IsNil, check.Commentf("failed to open %s: %s", layerPath, err))
+			defer f.Close()
 
-			entries, err := listTar(f)
+			entries, err := testutil.ListTar(f)
 			for _, e := range entries {
 				if !strings.Contains(e, "dev/") {
 					entriesSansDev = append(entriesSansDev, e)
@@ -300,4 +314,71 @@ func (s *DockerSuite) TestLoadZeroSizeLayer(c *check.C) {
 	testRequires(c, DaemonIsLinux)
 
 	dockerCmd(c, "load", "-i", "fixtures/load/emptyLayer.tar")
+}
+
+func (s *DockerSuite) TestSaveLoadParents(c *check.C) {
+	testRequires(c, DaemonIsLinux)
+
+	makeImage := func(from string, addfile string) string {
+		var (
+			out string
+		)
+		out, _ = dockerCmd(c, "run", "-d", from, "touch", addfile)
+		cleanedContainerID := strings.TrimSpace(out)
+
+		out, _ = dockerCmd(c, "commit", cleanedContainerID)
+		imageID := strings.TrimSpace(out)
+
+		dockerCmd(c, "rm", "-f", cleanedContainerID)
+		return imageID
+	}
+
+	idFoo := makeImage("busybox", "foo")
+	idBar := makeImage(idFoo, "bar")
+
+	tmpDir, err := ioutil.TempDir("", "save-load-parents")
+	c.Assert(err, checker.IsNil)
+	defer os.RemoveAll(tmpDir)
+
+	c.Log("tmpdir", tmpDir)
+
+	outfile := filepath.Join(tmpDir, "out.tar")
+
+	dockerCmd(c, "save", "-o", outfile, idBar, idFoo)
+	dockerCmd(c, "rmi", idBar)
+	dockerCmd(c, "load", "-i", outfile)
+
+	inspectOut := inspectField(c, idBar, "Parent")
+	c.Assert(inspectOut, checker.Equals, idFoo)
+
+	inspectOut = inspectField(c, idFoo, "Parent")
+	c.Assert(inspectOut, checker.Equals, "")
+}
+
+func (s *DockerSuite) TestSaveLoadNoTag(c *check.C) {
+	testRequires(c, DaemonIsLinux)
+
+	name := "saveloadnotag"
+
+	buildImageSuccessfully(c, name, withDockerfile("FROM busybox\nENV foo=bar"))
+	id := inspectField(c, name, "Id")
+
+	// Test to make sure that save w/o name just shows imageID during load
+	out, _, err := testutil.RunCommandPipelineWithOutput(
+		exec.Command(dockerBinary, "save", id),
+		exec.Command(dockerBinary, "load"))
+	c.Assert(err, checker.IsNil, check.Commentf("failed to save and load repo: %s, %v", out, err))
+
+	// Should not show 'name' but should show the image ID during the load
+	c.Assert(out, checker.Not(checker.Contains), "Loaded image: ")
+	c.Assert(out, checker.Contains, "Loaded image ID:")
+	c.Assert(out, checker.Contains, id)
+
+	// Test to make sure that save by name shows that name during load
+	out, _, err = testutil.RunCommandPipelineWithOutput(
+		exec.Command(dockerBinary, "save", name),
+		exec.Command(dockerBinary, "load"))
+	c.Assert(err, checker.IsNil, check.Commentf("failed to save and load repo: %s, %v", out, err))
+	c.Assert(out, checker.Contains, "Loaded image: "+name+":latest")
+	c.Assert(out, checker.Not(checker.Contains), "Loaded image ID:")
 }

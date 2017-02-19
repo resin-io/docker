@@ -18,6 +18,7 @@ func profilerSetup(mainRouter *mux.Router) {
 	r.HandleFunc("/pprof/cmdline", pprof.Cmdline)
 	r.HandleFunc("/pprof/profile", pprof.Profile)
 	r.HandleFunc("/pprof/symbol", pprof.Symbol)
+	r.HandleFunc("/pprof/trace", pprof.Trace)
 	r.HandleFunc("/pprof/block", pprof.Handler("block").ServeHTTP)
 	r.HandleFunc("/pprof/heap", pprof.Handler("heap").ServeHTTP)
 	r.HandleFunc("/pprof/goroutine", pprof.Handler("goroutine").ServeHTTP)
@@ -28,13 +29,13 @@ func profilerSetup(mainRouter *mux.Router) {
 func expVars(w http.ResponseWriter, r *http.Request) {
 	first := true
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	fmt.Fprintf(w, "{\n")
+	fmt.Fprintln(w, "{")
 	expvar.Do(func(kv expvar.KeyValue) {
 		if !first {
-			fmt.Fprintf(w, ",\n")
+			fmt.Fprintln(w, ",")
 		}
 		first = false
 		fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
 	})
-	fmt.Fprintf(w, "\n}\n")
+	fmt.Fprintln(w, "\n}")
 }

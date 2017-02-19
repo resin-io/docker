@@ -1,13 +1,13 @@
 package exec
 
 import (
-	"fmt"
+	"runtime"
 	"sync"
-	"time"
 
-	"github.com/docker/docker/daemon/execdriver"
+	"github.com/Sirupsen/logrus"
+	"github.com/docker/docker/container/stream"
+	"github.com/docker/docker/libcontainerd"
 	"github.com/docker/docker/pkg/stringid"
-	"github.com/docker/docker/runconfig"
 )
 
 // Config holds the configurations for execs. The Daemon keeps
@@ -15,29 +15,51 @@ import (
 // examined both during and after completion.
 type Config struct {
 	sync.Mutex
-	*runconfig.StreamConfig
-	ID            string
-	Running       bool
-	ExitCode      *int
-	ProcessConfig *execdriver.ProcessConfig
-	OpenStdin     bool
-	OpenStderr    bool
-	OpenStdout    bool
-	CanRemove     bool
-	ContainerID   string
-	DetachKeys    []byte
-
-	// waitStart will be closed immediately after the exec is really started.
-	waitStart chan struct{}
+	StreamConfig *stream.Config
+	ID           string
+	Running      bool
+	ExitCode     *int
+	OpenStdin    bool
+	OpenStderr   bool
+	OpenStdout   bool
+	CanRemove    bool
+	ContainerID  string
+	DetachKeys   []byte
+	Entrypoint   string
+	Args         []string
+	Tty          bool
+	Privileged   bool
+	User         string
+	Env          []string
+	Pid          int
 }
 
 // NewConfig initializes the a new exec configuration
 func NewConfig() *Config {
 	return &Config{
 		ID:           stringid.GenerateNonCryptoID(),
-		StreamConfig: runconfig.NewStreamConfig(),
-		waitStart:    make(chan struct{}),
+		StreamConfig: stream.NewConfig(),
 	}
+}
+
+// InitializeStdio is called by libcontainerd to connect the stdio.
+func (c *Config) InitializeStdio(iop libcontainerd.IOPipe) error {
+	c.StreamConfig.CopyToPipe(iop)
+
+	if c.StreamConfig.Stdin() == nil && !c.Tty && runtime.GOOS == "windows" {
+		if iop.Stdin != nil {
+			if err := iop.Stdin.Close(); err != nil {
+				logrus.Errorf("error closing exec stdin: %+v", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// CloseStreams closes the stdio streams for the exec
+func (c *Config) CloseStreams() error {
+	return c.StreamConfig.CloseStreams()
 }
 
 // Store keeps track of the exec configurations.
@@ -93,30 +115,4 @@ func (e *Store) List() []string {
 	}
 	e.RUnlock()
 	return IDs
-}
-
-// Wait waits until the exec process finishes or there is an error in the error channel.
-func (c *Config) Wait(cErr chan error) error {
-	// Exec should not return until the process is actually running
-	select {
-	case <-c.waitStart:
-	case err := <-cErr:
-		return err
-	}
-	return nil
-}
-
-// Close closes the wait channel for the progress.
-func (c *Config) Close() {
-	close(c.waitStart)
-}
-
-// Resize changes the size of the terminal for the exec process.
-func (c *Config) Resize(h, w int) error {
-	select {
-	case <-c.waitStart:
-	case <-time.After(time.Second):
-		return fmt.Errorf("Exec %s is not running, so it can not be resized.", c.ID)
-	}
-	return c.ProcessConfig.Terminal.Resize(h, w)
 }

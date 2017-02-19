@@ -8,7 +8,8 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/docker/engine-api/types/container"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/pkg/sysinfo"
 )
 
 // TODO Windows: This will need addressing for a Windows daemon.
@@ -121,6 +122,27 @@ func TestUTSModeTest(t *testing.T) {
 	}
 }
 
+func TestUsernsModeTest(t *testing.T) {
+	usrensMode := map[container.UsernsMode][]bool{
+		// private, host, valid
+		"":                {true, false, true},
+		"something:weird": {true, false, false},
+		"host":            {false, true, true},
+		"host:name":       {true, false, true},
+	}
+	for usernsMode, state := range usrensMode {
+		if usernsMode.IsPrivate() != state[0] {
+			t.Fatalf("UsernsMode.IsPrivate for %v should have been %v but was %v", usernsMode, state[0], usernsMode.IsPrivate())
+		}
+		if usernsMode.IsHost() != state[1] {
+			t.Fatalf("UsernsMode.IsHost for %v should have been %v but was %v", usernsMode, state[1], usernsMode.IsHost())
+		}
+		if usernsMode.Valid() != state[2] {
+			t.Fatalf("UsernsMode.Valid for %v should have been %v but was %v", usernsMode, state[2], usernsMode.Valid())
+		}
+	}
+}
+
 func TestPidModeTest(t *testing.T) {
 	pidModes := map[container.PidMode][]bool{
 		// private, host, valid
@@ -145,7 +167,7 @@ func TestPidModeTest(t *testing.T) {
 func TestRestartPolicy(t *testing.T) {
 	restartPolicies := map[container.RestartPolicy][]bool{
 		// none, always, failure
-		container.RestartPolicy{}:                {false, false, false},
+		container.RestartPolicy{}:                {true, false, false},
 		container.RestartPolicy{"something", 0}:  {false, false, false},
 		container.RestartPolicy{"no", 0}:         {true, false, false},
 		container.RestartPolicy{"always", 0}:     {false, true, false},
@@ -195,7 +217,67 @@ func TestDecodeHostConfig(t *testing.T) {
 		}
 
 		if len(c.CapDrop) != 1 && c.CapDrop[0] != "NET_ADMIN" {
-			t.Fatalf("Expected CapDrop MKNOD, got %v", c.CapDrop)
+			t.Fatalf("Expected CapDrop NET_ADMIN, got %v", c.CapDrop)
+		}
+	}
+}
+
+func TestValidateResources(t *testing.T) {
+	type resourceTest struct {
+		ConfigCPURealtimePeriod   int64
+		ConfigCPURealtimeRuntime  int64
+		SysInfoCPURealtimePeriod  bool
+		SysInfoCPURealtimeRuntime bool
+		ErrorExpected             bool
+		FailureMsg                string
+	}
+
+	tests := []resourceTest{
+		{
+			ConfigCPURealtimePeriod:   1000,
+			ConfigCPURealtimeRuntime:  1000,
+			SysInfoCPURealtimePeriod:  true,
+			SysInfoCPURealtimeRuntime: true,
+			ErrorExpected:             false,
+			FailureMsg:                "Expected valid configuration",
+		},
+		{
+			ConfigCPURealtimePeriod:   5000,
+			ConfigCPURealtimeRuntime:  5000,
+			SysInfoCPURealtimePeriod:  false,
+			SysInfoCPURealtimeRuntime: true,
+			ErrorExpected:             true,
+			FailureMsg:                "Expected failure when cpu-rt-period is set but kernel doesn't support it",
+		},
+		{
+			ConfigCPURealtimePeriod:   5000,
+			ConfigCPURealtimeRuntime:  5000,
+			SysInfoCPURealtimePeriod:  true,
+			SysInfoCPURealtimeRuntime: false,
+			ErrorExpected:             true,
+			FailureMsg:                "Expected failure when cpu-rt-runtime is set but kernel doesn't support it",
+		},
+		{
+			ConfigCPURealtimePeriod:   5000,
+			ConfigCPURealtimeRuntime:  10000,
+			SysInfoCPURealtimePeriod:  true,
+			SysInfoCPURealtimeRuntime: false,
+			ErrorExpected:             true,
+			FailureMsg:                "Expected failure when cpu-rt-runtime is greater than cpu-rt-period",
+		},
+	}
+
+	for _, rt := range tests {
+		var hc container.HostConfig
+		hc.Resources.CPURealtimePeriod = rt.ConfigCPURealtimePeriod
+		hc.Resources.CPURealtimeRuntime = rt.ConfigCPURealtimeRuntime
+
+		var si sysinfo.SysInfo
+		si.CPURealtimePeriod = rt.SysInfoCPURealtimePeriod
+		si.CPURealtimeRuntime = rt.SysInfoCPURealtimeRuntime
+
+		if err := ValidateResources(&hc, &si); (err != nil) != rt.ErrorExpected {
+			t.Fatal(rt.FailureMsg, err)
 		}
 	}
 }

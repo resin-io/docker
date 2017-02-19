@@ -4,6 +4,7 @@ package stringid
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"regexp"
 	"strconv"
@@ -14,7 +15,10 @@ import (
 
 const shortLen = 12
 
-var validShortID = regexp.MustCompile("^[a-z0-9]{12}$")
+var (
+	validShortID = regexp.MustCompile("^[a-f0-9]{12}$")
+	validHex     = regexp.MustCompile(`^[a-f0-9]{64}$`)
+)
 
 // IsShortID determines if an arbitrary string *looks like* a short ID.
 func IsShortID(id string) bool {
@@ -24,16 +28,15 @@ func IsShortID(id string) bool {
 // TruncateID returns a shorthand version of a string identifier for convenience.
 // A collision with other shorthands is very unlikely, but possible.
 // In case of a collision a lookup with TruncIndex.Get() will fail, and the caller
-// will need to use a langer prefix, or the full-length Id.
+// will need to use a longer prefix, or the full-length Id.
 func TruncateID(id string) string {
 	if i := strings.IndexRune(id, ':'); i >= 0 {
 		id = id[i+1:]
 	}
-	trimTo := shortLen
-	if len(id) < shortLen {
-		trimTo = len(id)
+	if len(id) > shortLen {
+		id = id[:shortLen]
 	}
-	return id[:trimTo]
+	return id
 }
 
 func generateID(crypto bool) string {
@@ -57,10 +60,9 @@ func generateID(crypto bool) string {
 	}
 }
 
-// GenerateRandomID returns an unique id.
+// GenerateRandomID returns a unique id.
 func GenerateRandomID() string {
 	return generateID(true)
-
 }
 
 // GenerateNonCryptoID generates unique id without using cryptographically
@@ -68,4 +70,12 @@ func GenerateRandomID() string {
 // It helps you to save entropy.
 func GenerateNonCryptoID() string {
 	return generateID(false)
+}
+
+// ValidateID checks whether an ID string is a valid image ID.
+func ValidateID(id string) error {
+	if ok := validHex.MatchString(id); !ok {
+		return fmt.Errorf("image ID %q is invalid", id)
+	}
+	return nil
 }
