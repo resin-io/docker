@@ -207,23 +207,31 @@ func (p *v1Pusher) imageListForTag(imgID image.ID, dependenciesSeen map[layer.Ch
 
 	topLayerID := img.RootFS.ChainID()
 
+	topLayer := layer.EmptyLayer
+
 	var l layer.Layer
 	if topLayerID == "" {
 		l = layer.EmptyLayer
 	} else {
 		l, err = p.config.LayerStore.Get(topLayerID)
 		*referencedLayers = append(*referencedLayers, l)
+
+		if l.DiffID() == layer.EmptyLayer.DiffID() {
+			topLayer = l
+			l = l.Parent()
+		}
+
 		if err != nil {
 			return nil, fmt.Errorf("failed to get top layer from image: %v", err)
 		}
 	}
 
-	dependencyImages, parent, err := generateDependencyImages(l.Parent(), dependenciesSeen)
+	dependencyImages, parent, err := generateDependencyImages(l, dependenciesSeen)
 	if err != nil {
 		return nil, err
 	}
 
-	topImage, err := newV1TopImage(imgID, img, l, parent)
+	topImage, err := newV1TopImage(imgID, img, topLayer, parent)
 	if err != nil {
 		return nil, err
 	}
