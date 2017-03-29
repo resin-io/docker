@@ -207,11 +207,11 @@ func (p *v1Pusher) imageListForTag(imgID image.ID, dependenciesSeen map[layer.Ch
 
 	topLayerID := img.RootFS.ChainID()
 
-	topLayer := layer.EmptyLayer
-
+	var topLayer layer.Layer
 	var l layer.Layer
 	if topLayerID == "" {
 		l = layer.EmptyLayer
+		topLayer = l
 	} else {
 		l, err = p.config.LayerStore.Get(topLayerID)
 		*referencedLayers = append(*referencedLayers, l)
@@ -219,6 +219,8 @@ func (p *v1Pusher) imageListForTag(imgID image.ID, dependenciesSeen map[layer.Ch
 		if l.DiffID() == layer.EmptyLayer.DiffID() {
 			topLayer = l
 			l = l.Parent()
+		} else {
+			topLayer = layer.EmptyLayer
 		}
 
 		if err != nil {
