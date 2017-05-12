@@ -227,9 +227,18 @@ func (p *v1Pusher) imageListForTag(imgID image.ID, dependenciesSeen map[layer.Ch
 	}
 	l := lsl.Layer
 
-	dependencyImages, parent := generateDependencyImages(l.Parent(), dependenciesSeen)
+	var topLayer layer.Layer
 
-	topImage, err := newV1TopImage(imgID, img, l, parent)
+	if l.DiffID() == layer.EmptyLayer.DiffID() {
+		topLayer = l
+		l = l.Parent()
+	} else {
+		topLayer = layer.EmptyLayer
+	}
+
+	dependencyImages, parent := generateDependencyImages(l, dependenciesSeen)
+
+	topImage, err := newV1TopImage(imgID, img, topLayer, parent)
 	if err != nil {
 		return nil, err
 	}

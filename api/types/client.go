@@ -177,6 +177,7 @@ type ImageBuildOptions struct {
 	SecurityOpt []string
 	ExtraHosts  []string // List of extra hosts
 	Target      string
+	Volumes     []string
 }
 
 // ImageBuildResponse holds information

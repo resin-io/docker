@@ -30,6 +30,7 @@ import (
 	"github.com/docker/docker/pkg/stringid"
 	"github.com/docker/docker/pkg/urlutil"
 	runconfigopts "github.com/docker/docker/runconfig/opts"
+	containerutils "github.com/docker/docker/cli/command/container/utils"
 	units "github.com/docker/go-units"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -65,6 +66,7 @@ type buildOptions struct {
 	networkMode    string
 	squash         bool
 	target         string
+	volumes        opts.ListOpts
 }
 
 // NewBuildCommand creates a new `docker build` command
@@ -76,6 +78,7 @@ func NewBuildCommand(dockerCli *command.DockerCli) *cobra.Command {
 		ulimits:    opts.NewUlimitOpt(&ulimits),
 		labels:     opts.NewListOpts(opts.ValidateEnv),
 		extraHosts: opts.NewListOpts(opts.ValidateExtraHost),
+		volumes:   opts.NewListOpts(nil),
 	}
 
 	cmd := &cobra.Command{
@@ -119,6 +122,7 @@ func NewBuildCommand(dockerCli *command.DockerCli) *cobra.Command {
 	flags.StringVar(&options.target, "target", "", "Set the target build stage to build.")
 
 	command.AddTrustVerificationFlags(flags)
+	flags.VarP(&options.volumes, "volume", "v", "Bind mount a volume")
 
 	flags.BoolVar(&options.squash, "squash", false, "Squash newly built layers into a single new layer")
 	flags.SetAnnotation("squash", "experimental", nil)
@@ -277,6 +281,13 @@ func runBuild(dockerCli *command.DockerCli, options buildOptions) error {
 	var body io.Reader = progress.NewProgressReader(buildCtx, progressOutput, 0, "", "Sending build context to Docker daemon")
 
 	authConfigs, _ := dockerCli.GetAllCredentials()
+	// only allow bind-mounting during build
+	for bind := range options.volumes.GetMap() {
+		if arr := containerutils.VolumeSplitN(bind, 2); len(arr) == 1 {
+			return fmt.Errorf("Cannot use non-bind mount during build: %s", bind)
+		}
+	}
+
 	buildOptions := types.ImageBuildOptions{
 		Memory:         options.memory.Value(),
 		MemorySwap:     options.memorySwap.Value(),
@@ -305,6 +316,7 @@ func runBuild(dockerCli *command.DockerCli, options buildOptions) error {
 		Squash:         options.squash,
 		ExtraHosts:     options.extraHosts.GetAll(),
 		Target:         options.target,
+		Volumes:        options.volumes.GetAll(),
 	}
 
 	response, err := dockerCli.Client().ImageBuild(ctx, body, buildOptions)
