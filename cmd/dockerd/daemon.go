@@ -21,6 +21,7 @@ import (
 	"github.com/docker/docker/api/server/router/container"
 	distributionrouter "github.com/docker/docker/api/server/router/distribution"
 	"github.com/docker/docker/api/server/router/image"
+	deltarouter "github.com/docker/docker/api/server/router/delta"
 	"github.com/docker/docker/api/server/router/network"
 	pluginrouter "github.com/docker/docker/api/server/router/plugin"
 	sessionrouter "github.com/docker/docker/api/server/router/session"
@@ -513,6 +514,7 @@ func initRouter(opts routerOptions) {
 		checkpointrouter.NewRouter(opts.daemon, decoder),
 		container.NewRouter(opts.daemon, decoder),
 		image.NewRouter(opts.daemon, decoder),
+		deltarouter.NewRouter(opts.daemon),
 		systemrouter.NewRouter(opts.daemon, opts.cluster, opts.buildCache),
 		volume.NewRouter(opts.daemon),
 		build.NewRouter(opts.buildBackend, opts.daemon),
