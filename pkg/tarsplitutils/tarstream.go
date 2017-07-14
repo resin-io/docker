@@ -8,7 +8,7 @@ import (
 	"github.com/vbatts/tar-split/tar/storage"
 )
 
-func min(x, y int) int {
+func min(x, y int64) int64 {
 	if x < y {
 		return x
 	}
@@ -27,7 +27,7 @@ type randomAccessTarStream struct {
 	fg storage.FileGetter
 }
 
-func (self randomAccessTarStream) ReadAt(p []byte, off int64) (n int, err error) {
+func (self randomAccessTarStream) ReadAt(p []byte, off int64) (int, error) {
 	// Find the first entry that we're interested in
 	firstEntry := 0
 
@@ -54,10 +54,10 @@ func (self randomAccessTarStream) ReadAt(p []byte, off int64) (n int, err error)
 
 	// The cursor will most likely be negative the first time. This signifies
 	// that we need to read some data first before starting to fill the buffer
-	n = int(cur_off - off)
+	n := cur_off - off
 
 	for _, entry := range self.entries[firstEntry:] {
-		if n >= len(p) {
+		if n >= int64(len(p)) {
 			break
 		}
 
@@ -69,7 +69,7 @@ func (self randomAccessTarStream) ReadAt(p []byte, off int64) (n int, err error)
 				n = 0
 			}
 
-			n += copy(p[n:], payload)
+			n += int64(copy(p[n:], payload))
 		case storage.FileType:
 			if entry.Size == 0 {
 				continue
@@ -80,13 +80,17 @@ func (self randomAccessTarStream) ReadAt(p []byte, off int64) (n int, err error)
 				return 0, err
 			}
 
-			end := min(n + int(entry.Size), len(p))
+			end := min(n + entry.Size, int64(len(p)))
 
 			if n < 0 {
 				if seeker, ok := fh.(io.Seeker); ok {
-					seeker.Seek(int64(-n), io.SeekStart)
+					if _, err := seeker.Seek(-n, io.SeekStart); err != nil {
+						return 0, err
+					}
 				} else {
-					io.CopyN(ioutil.Discard, fh, int64(-n))
+					if _, err := io.CopyN(ioutil.Discard, fh, -n); err != nil {
+						return 0, err
+					}
 				}
 				n = 0
 			}
