@@ -55,7 +55,7 @@ Moby is NOT recommended for:
 
 # Transitioning to Moby
 
-Docker is transitioning all of its open source collaborations to the Moby project going forward.
+Docker is transitioning all of its open source collaborations to the Moby Project going forward.
 During the transition, all open source activity should continue as usual.
 
 We are proposing the following list of changes:
